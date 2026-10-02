@@ -45,7 +45,7 @@ KIND = {"trigger": ("Alert received", "#FDD663"), "case": ("Case opened", "#FDD6
         "execute": ("Executed", "#81C995"), "request": ("Evidence request", "#8AB4F8"),
         "response": ("Reply", "#8AB4F8"), "llm": ("LLM", "#8AB4F8"), "memory": ("Case memory", "#81C995"),
         "guardrail": ("Guardrail", "#F28B82"), "error": ("Error", "#F28B82"), "approval": ("Approval", "#81C995")}
-BADGE_CLS = {"TIGERGRAPH": "tg", "CASE MEMORY": "mem", "MEMORY MODEL": "mem", "GRAPHRAG": "rag", "CUSTOMER": "cust"}
+BADGE_CLS = {"TIGERGRAPH": "tg", "SYNTHETIC GRAPH": "tg", "CASE MEMORY": "mem", "MEMORY MODEL": "mem", "GRAPHRAG": "rag", "CUSTOMER": "cust"}
 GLYPH = {"BLOCK_ALL_CARDS": ("■", "crit"), "BLOCK_CARD": ("■", "crit"), "DECLINE_TRANSACTION": ("✕", "crit"),
          "STEP_UP_AUTH": ("⇡", "warn"), "VERIFY_WITH_CUSTOMER": ("?", "warn"), "ESCALATE_TO_ANALYST": ("↑", "warn"),
          "ALLOW_TRANSACTION": ("✓", "legit"), "CLOSE_NO_FRAUD": ("✓", "legit"), "MONITOR_CARD": ("◉", "warn")}
@@ -252,7 +252,7 @@ def show_graph(answer, events, height=520):
              f"<span class='chip'>{ndev} shared device{'' if ndev == 1 else 's'}</span>",
              f"<span class='chip'>{cnt['memory']} memory case(s)</span>",
              f"<span class='chip c-legit'><span class='d' style='background:var(--legit)'></span>"
-             f"{'written to TigerGraph' if c['written_to_graph'] else 'not written'} · {e(c['graph_case_id'])}</span>"]
+             f"{'written to TigerGraph' if c['written_to_graph'] else ('sandbox only, not written' if _sandbox() else 'not written')} · {e(c['graph_case_id'])}</span>"]
     st.html(f"<div style='display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px'>{''.join(chips)}</div>")
     if hasattr(st, "iframe"):
         st.iframe(doc, height=height + 8)
@@ -522,7 +522,7 @@ def evolution(v: vm.View):
         body = (stage("1 · Case-memory prior", v.prior, None, "Model score only, before the graph")
                 + "<div class='arr'>→</div>"
                 + stage("2 · Graph evidence", None, None, "",
-                        f"<div class='reply'>{a['tool_calls']} TigerGraph queries via {e(via_text(v.events))} · {v.final.support} independent "
+                        f"<div class='reply'>{a['tool_calls']} {'queries on the synthetic graph' if _sandbox() else 'TigerGraph queries via ' + e(via_text(v.events))} · {v.final.support} independent "
                         f"line(s) agree · no customer contact needed</div>", mid=True)
                 + "<div class='arr'>→</div>"
                 + stage("3 · Decision", v.p_final, v.final.confidence, f_act))
@@ -539,6 +539,8 @@ def evidence_col(items: list[dict]):
     for x in sorted(items, key=lambda x: (order.get(x["direction"], 2), -abs(math.log(x.get("lr") or 1)))):
         d = x["direction"] if x["direction"] in ("fraud", "legit") else "neutral"
         badge = vm.source_badge(x["ref"], x["source"])
+        if badge == "TIGERGRAPH" and _sandbox():
+            badge = "SYNTHETIC GRAPH"
         lr = x.get("lr")
         lrt = ""
         if lr and d != "neutral":
@@ -637,7 +639,13 @@ def tab_memory(answer: dict, items: list[dict]):
                 f"<div class='decision' style='margin-top:8px'>{e(c['pattern_description'])}</div>")
 
 
+def _sandbox() -> bool:
+    """True while rendering a Scenario lab case: its graph is a generated in-memory world, not TigerGraph."""
+    return bool(st.session_state.get("_render_sandbox"))
+
+
 def show_investigation(case: dict, answer: dict, events: list[dict]):
+    st.session_state["_render_sandbox"] = str(case.get("case_id", "")).startswith("LAB-")
     v = vm.build(case, answer, events)
     items = merged_evidence(answer, events)
     case_header(case, v)
@@ -649,7 +657,8 @@ def show_investigation(case: dict, answer: dict, events: list[dict]):
     with right:
         sufficiency_panel(v)
     evolution(v)
-    sec("Investigation graph", "TigerGraph · FraudGraph · drag, zoom, hover")
+    sec("Investigation graph", ("Synthetic world · in-memory sandbox" if _sandbox() else "TigerGraph · FraudGraph")
+        + " · drag, zoom, hover")
     show_graph(answer, events)
     sec("Evidence → Assessment → Decision", "kept separate on purpose")
     c1, c2 = st.columns([1.2, 1], gap="medium")
@@ -657,7 +666,8 @@ def show_investigation(case: dict, answer: dict, events: list[dict]):
         evidence_col(items)
     with c2:
         assessment_col(v, events)
-    sec("Agent activity", f"{answer['tool_calls']} graph calls · {answer['latency_s']}s · {len(events)} steps")
+    secs = answer['latency_s']
+    sec("Agent activity", f"{answer['tool_calls']} graph calls · {'under 0.1' if secs < 0.1 else secs}s · {len(events)} steps")
     activity(events)
     st.html("<div style='height:8px'></div>")
     tabs = st.tabs(["Suspicious activity report", "Case memory", "Answer file", "Raw trace"])
@@ -1357,7 +1367,8 @@ def page_lab():
         box, emit = _lab_emit_box("Agent investigating the generated world …")
         inv = Investigation(sc.backend, llm, sc.alert, emit=emit, use_llm_investigator=False)
         ans = inv.run()
-        box.update(label=f"Investigation complete · {ans['tool_calls']} graph calls · {ans['latency_s']}s",
+        box.update(label=f"Investigation complete · {ans['tool_calls']} queries on the synthetic graph · "
+                         f"{'under 0.1' if ans['latency_s'] < 0.1 else ans['latency_s']}s",
                    state="complete", expanded=False)
         st.session_state["lab"] = {"alert": sc.alert, "answer": ans, "events": inv.events, "planted": sc.planted,
                                    "stats": sc.stats, "expect": sc.expect, "kind": kind}
