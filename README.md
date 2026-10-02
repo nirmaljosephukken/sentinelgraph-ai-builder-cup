@@ -198,7 +198,7 @@ SentinelGraph grew out of an earlier agentic fraud prototype on TigerGraph, buil
 - the "Ask the agent" console page;
 - customer dispute intake in any language, and a live alert stream on Pub/Sub with a Cloud Run worker and a Firestore-backed live queue;
 - deployment on Cloud Run with Secret Manager, a least-privilege service account and all Gemini calls on Vertex AI (no API key in the cloud);
-- link-mechanism grounding extended to every model-written sentence, after judge feedback on the earlier version.
+- link-mechanism grounding for every model-written sentence, including the agent's chat answers.
 
 ## Honest notes
 
