@@ -1172,10 +1172,147 @@ def page_agent():
         st.rerun()
 
 
+# =========================================================================== customer dispute intake + live queue
+DEMO_CUSTOMERS = [("C07297", "C07297-K1", "Hindi"), ("C11923", "C11923-K2", "Malayalam"), ("C08623", "C08623-K2", "English"),
+                  ("C02354", "C02354-K2", "English"), ("C09988", "C09988-K1", "English")]
+LIVE_CHIP = {"queued": ("c-warn", "queued"), "investigating": ("c-warn", "investigating"), "done": ("c-legit", "done"),
+             "error": ("c-crit", "error")}
+
+
+def _live_mode_label() -> str:
+    from agent import live
+    return "Pub/Sub → Cloud Run worker → Firestore" if live.MODE == "gcp" else "local queue (set LIVE_BACKEND=gcp on Cloud Run)"
+
+
+def page_intake():
+    from agent import intake, live
+    page_head("Investigations", "Customer dispute",
+              "A customer describes a problem in their own words, in any language. Gemini reads and translates it, the "
+              "graph finds the transaction, and the alert goes onto the live stream for the agent to investigate.")
+    live.use_backend(backend())
+    c1, c2 = st.columns([1.1, 2], gap="large")
+    with c1:
+        labels = [f"{cu} · card {ca}" for cu, ca, _ in DEMO_CUSTOMERS]
+        who = st.selectbox("Signed-in customer (demo)", labels)
+        cust, card, lang = DEMO_CUSTOMERS[labels.index(who)]
+        ex_lang = st.radio("Example message", list(intake.EXAMPLES), index=list(intake.EXAMPLES).index(lang), horizontal=True)
+        st.caption("The examples quote amounts that exist on these cards. Edit the text freely; an amount that is "
+                   "not on the card gets a follow-up question instead of a guess.")
+    with c2:
+        msg = st.text_area("Customer message", intake.EXAMPLES[ex_lang], height=120, key=f"msg_{card}_{ex_lang}")
+        go = st.button("Read and send to the agent", type="primary", icon=":material/send:")
+    if go and msg.strip():
+        with st.spinner("Gemini is reading the message …"):
+            ex = intake.extract(msg, LLM(SETTINGS))
+        warn = (f"<div class='sub' style='color:var(--warn)'>Gemini suggested ${ex['amount_rejected']:,.2f}, which the customer did "
+                f"not write, so it was discarded.</div>" if ex.get("amount_rejected") is not None else "")
+        st.html("<div class='eyebrow' style='margin:14px 0 8px'>1 · Read by Gemini</div><div class='ev neutral'>"
+                f"<div class='m' style='margin:0 0 6px'><span class='badge rag'>{e(ex.get('read_by', ''))}</span>"
+                f"<span class='ref'>{e(ex.get('language', ''))} · claim: {e(str(ex.get('claim', '')).replace('_', ' '))} · "
+                f"amount: {money(ex['amount']) if ex.get('amount') is not None else 'not stated'}</span></div>"
+                f"<b>English:</b> {e(ex.get('english', ''))}<br><span class='muted'>{e(ex.get('summary', ''))}</span>{warn}</div>")
+        m = intake.match(backend(), card, ex.get("amount"))
+        if m["status"] != "matched":
+            cands = "".join(f"<tr><td class='mono'>{e(r['id'])}</td><td class='mono'>{e(r['ts'])}</td><td class='num'>{money(r['amount'])}</td>"
+                            f"<td>{e(r['channel'])}</td></tr>" for r in m.get("candidates", []))
+            st.html("<div class='eyebrow' style='margin:14px 0 8px'>2 · Match in the graph</div>"
+                    f"<div class='ev neutral'><b>Follow-up question to the customer:</b> {e(m['question'])}</div>"
+                    + (("<div class='tbl' style='margin-top:8px'><table><thead><tr><th>Txn</th><th>Time</th>"
+                        "<th style='text-align:right'>Amount</th><th>Channel</th></tr></thead><tbody>" + cands + "</tbody></table></div>")
+                       if cands else ""))
+            return
+        x = m["txn"]
+        more = f" ({m['n_matches']} payments of this amount; the most recent was chosen)" if m["n_matches"] > 1 else ""
+        st.html("<div class='eyebrow' style='margin:14px 0 8px'>2 · Matched in the graph</div><div class='ev neutral'>"
+                f"Transaction <span class='mono'>{e(x['id'])}</span> · {e(x['ts'])} · {money(x['amount'])} · {e(x['channel'])} "
+                f"on card <span class='mono'>{e(card)}</span>{e(more)}</div>")
+        alert = intake.build_alert(card, cust, msg, ex, m)
+        aid = live.publish(alert, "customer intake")
+        st.session_state["intake_last"] = aid
+        st.html("<div class='eyebrow' style='margin:14px 0 8px'>3 · On the live stream</div><div class='ev neutral'>"
+                f"Alert <span class='mono'>{e(aid)}</span> sent ({e(_live_mode_label())}). Follow it below or on the "
+                "<a href='./live' target='_self'>Live queue</a>.</div>")
+    aid = st.session_state.get("intake_last")
+    if aid:
+        _intake_status(aid)
+
+
+@st.fragment(run_every=3)
+def _intake_status(aid: str):
+    from agent import live
+    d = live.store().get(aid) or {}
+    cls, txt = LIVE_CHIP.get(d.get("status", "queued"), ("", d.get("status", "")))
+    extra = ""
+    if d.get("status") == "done":
+        extra = (f" · <b>{e(d.get('verdict', ''))}</b> · fraud probability {pct(d.get('fraud_probability', 0))} · "
+                 f"{e(', '.join(d.get('final_actions', [])))} · {d.get('seconds', '')}s")
+    elif d.get("status") == "investigating":
+        extra = f" · {e(vm.short(d.get('last_step', 'querying TigerGraph'), 110))}"
+    elif d.get("status") == "error":
+        extra = f" · {e(d.get('error', ''))}"
+    st.html(f"<div class='sub'><span class='mono'>{e(aid)}</span> <span class='chip {cls}'>{e(txt)}</span>{extra}</div>")
+
+
+def page_live():
+    from agent import live
+    page_head("Investigations", "Live queue",
+              f"Alerts arriving on the stream and being investigated as they land. Pipeline: {_live_mode_label()}.")
+    live.use_backend(backend())
+    b1, b2, _ = st.columns([1.3, 1.3, 3])
+    if b1.button("Replay bank feed (3 alerts)", icon=":material/podcasts:", use_container_width=True):
+        off = st.session_state.get("feed_off", 0)
+        for a in live.bank_feed(3, off):
+            live.publish(a, "bank feed")
+        st.session_state["feed_off"] = (off + 3) % 18
+        st.toast("3 alerts published to the stream")
+    b2.button("Refresh", icon=":material/refresh:", use_container_width=True)
+    _live_table()
+    done = [d for d in live.store().recent(30) if d.get("status") == "done"]
+    if done:
+        pick = st.selectbox("Open an investigated alert", [d["alert_id"] for d in done])
+        d = next(x for x in done if x["alert_id"] == pick)
+        try:
+            case, ans, evs = json.loads(d["alert"]), json.loads(d["answer"]), json.loads(d["events"])
+        except Exception as ex:  # noqa: BLE001
+            st.error(f"Could not load {pick}: {ex}")
+            return
+        it = case.get("intake")
+        if it:
+            st.html("<div class='ev neutral' style='margin:10px 0'><b>Customer wrote</b> "
+                    f"({e(it.get('language', ''))}): {e(it.get('original', ''))}<br><b>Gemini read it as:</b> "
+                    f"{e(it.get('english', ''))}</div>")
+        show_investigation(case, ans, evs)
+
+
+@st.fragment(run_every=3)
+def _live_table():
+    from agent import live
+    docs = live.store().recent(30)
+    if not docs:
+        st.html("<div class='empty'>No alerts on the stream yet. Send a customer dispute or replay the bank feed.</div>")
+        return
+    rows = []
+    for d in docs:
+        cls, txt = LIVE_CHIP.get(d.get("status", ""), ("", d.get("status", "")))
+        res = (f"<b>{e(d.get('verdict', ''))}</b> · {pct(d.get('fraud_probability', 0))}" if d.get("status") == "done"
+               else e(vm.short(d.get("last_step", "") or d.get("error", ""), 70)))
+        acts = e(", ".join(d.get("final_actions", [])[:3]))
+        rows.append(f"<tr><td class='mono' style='white-space:nowrap'>{e(str(d.get('received_at', ''))[11:19])}</td>"
+                    f"<td class='mono'>{e(d.get('alert_id', ''))}</td><td>{e(d.get('source', ''))}</td>"
+                    f"<td>{e(str(d.get('trigger', '')).replace('_', ' '))}</td><td class='mono'>{e(d.get('txn_id', ''))}</td>"
+                    f"<td><span class='chip {cls}'>{e(txt)}</span></td><td>{res}</td><td>{acts}</td>"
+                    f"<td class='num'>{e(d.get('seconds', ''))}</td></tr>")
+    st.html("<div class='tbl'><table><thead><tr><th>Received (UTC)</th><th>Alert</th><th>Source</th><th>Trigger</th><th>Txn</th>"
+            "<th>Status</th><th>Result</th><th>Next best actions</th><th style='text-align:right'>Seconds</th></tr></thead><tbody>"
+            + "".join(rows) + "</tbody></table></div>")
+
+
 # =========================================================================== navigation
 pages = {
     "Investigations": [st.Page(page_investigate, title="Investigate", icon=":material/policy:", url_path="investigate", default=True),
                        st.Page(page_agent, title="Ask the agent", icon=":material/smart_toy:", url_path="agent"),
+                       st.Page(page_intake, title="Customer dispute", icon=":material/forum:", url_path="dispute"),
+                       st.Page(page_live, title="Live queue", icon=":material/stream:", url_path="live"),
                        st.Page(page_portfolio, title="Case Portfolio", icon=":material/folder_open:", url_path="portfolio"),
                        st.Page(page_alerts, title="Alert Queue", icon=":material/notifications_active:", url_path="alerts")],
     "Intelligence": [st.Page(page_graph, title="Investigation Graph", icon=":material/hub:", url_path="graph"),

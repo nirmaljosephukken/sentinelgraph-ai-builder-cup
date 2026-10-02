@@ -28,6 +28,7 @@ SentinelGraph works an alert the way a careful analyst would, and shows its work
 4. **Recommends the next best action with its approval route.** Auto actions run; blocking a card waits for a team lead (L1); filing a suspicious activity report waits for a fraud manager (L2).
 5. **Explains itself in plain English.** Analysts talk to a Gemini agent ("Investigate HHG-003", "How are the cards in HHG-006 linked?", "Why does blocking need a team lead?") that calls the tools and cites the policy.
 6. **Remembers.** Every case is written back to the graph with its audit trail, so the next investigation can find it.
+7. **Takes complaints in the customer's own language.** A customer writes "मैंने यह खरीदारी नहीं की" or "ഞാൻ അത് ചെയ്തിട്ടില്ല"; Gemini translates it and reads the claim and amount, the graph finds the transaction, and the alert goes onto a live Pub/Sub stream where a Cloud Run worker investigates it within seconds.
 
 ## Built on Google Cloud
 
@@ -35,10 +36,12 @@ SentinelGraph works an alert the way a careful analyst would, and shows its work
 |---|---|
 | **Agent Development Kit (ADK)** | The analyst-facing agent (`sentinel_adk/`). Gemini decides which of six tools to call: investigate an alert, load a saved case, list alerts, look up a transaction, search the policy, search case memory. ADK callbacks implement the guardrails below. |
 | **Gemini on Vertex AI** | Every Gemini call in the cloud goes through Vertex AI with the Cloud Run service account, so there is no API key in the deployment: the ADK agent, and the case writer that drafts summaries and SAR narratives (validated before use; any unsupported ID or link claim falls back to a template). |
-| **Cloud Run** | One container serves the analyst console and the ADK agent, with session affinity for the console's websocket. |
+| **Cloud Run** | Two services from one image: the analyst console with the ADK agent (public), and a private worker that investigates alerts from the stream. |
+| **Pub/Sub** | The live alert stream (`fraud-alerts`). Customer disputes and the bank's own alerts are published to it; a push subscription delivers each one to the worker with an OIDC token. |
+| **Firestore** | The live queue: every alert's stage (queued, investigating, done) and its result, read by the console as it updates. |
 | **Secret Manager** | Holds the graph credential, injected at deploy time. Nothing secret is in the image or the repo. |
 | **Cloud Build + Artifact Registry** | `gcloud run deploy --source .` builds the `Dockerfile` and stores the image. |
-| **IAM** | A dedicated service account with only Secret Manager access and `roles/aiplatform.user`. |
+| **IAM** | One dedicated service account: Secret Manager access, `aiplatform.user`, `pubsub.publisher`, `datastore.user`, and `run.invoker` on the private worker only. |
 
 The graph itself lives on TigerGraph Savanna and is reached through the official TigerGraph MCP server.
 
@@ -46,17 +49,24 @@ The graph itself lives on TigerGraph Savanna and is reached through the official
 
 ```mermaid
 flowchart LR
-  A[Analyst] --> CR
+  C[Customer message<br/>any language] --> IN
+  A[Analyst] --> UI
   subgraph CR[Cloud Run]
     UI[SentinelGraph console] --> ADK[ADK agent<br/>Gemini]
+    IN[Dispute intake<br/>Gemini reads · graph matches] 
+    W[Worker<br/>private]
     ADK -->|tools| ENG[Decision engine<br/>evidence fusion + policy as code]
-    UI --> ENG
+    W --> ENG
   end
+  IN -->|alert| PS[[Pub/Sub<br/>fraud-alerts]]
+  BANK[Bank alert feed] --> PS
+  PS -->|push + OIDC| W
+  W --> FS[(Firestore<br/>live queue)]
+  FS --> UI
   ADK <-->|Vertex AI| GEM[Gemini]
   SM[Secret Manager] -.-> CR
-  ENG -->|MCP: installed GSQL queries + vector search| TG[(TigerGraph Savanna<br/>transactions · devices · case memory · policy)]
-  ENG -->|case + audit trail| TG
-  ENG --> NBA[Next best action<br/>auto executed · L1/L2 wait for a human]
+  ENG -->|MCP: GSQL + vector search| TG[(TigerGraph Savanna)]
+  ENG --> NBA[Next best action<br/>auto · L1/L2 wait for a human]
 ```
 
 ## Trust by design
@@ -68,6 +78,7 @@ The point of an AI investigator in a bank is decisions you can defend. SentinelG
 - **An answer guardrail on every reply.** An ADK `after_model_callback` removes any sentence that cites a card, customer, transaction or case ID that no tool returned, or that claims a link between cards (shared device, ring, shared email) which the current case's evidence does not contain.
 - **Link mechanisms come from the data.** Each connected card carries the kind of link the detector found (`shared_device`, `peer_device`, `peer_email`, `structuring`), and the sentence explaining it is written in code, not by the model.
 - **A validator for every answer file.** `python validate_answers.py` checks every ID, exposure sums, approval routes, SAR consistency and every stated link mechanism against the raw data.
+- **Gemini never picks the transaction.** In dispute intake Gemini only reads and translates. An amount the customer did not write is discarded, the transaction is found by a graph lookup, and if nothing matches the customer gets a follow-up question instead of a guess.
 - **Policy as code.** Fraud Policy rules R1 to R10, the stop rule (act at 85% or 15% with two independent lines of evidence) and a guard that refuses breaches such as blocking on one weak signal.
 
 ### Example (live run on HHG-006, abridged)
@@ -150,7 +161,7 @@ python run_cases.py             # re-run the 20 benchmark alerts
 python validate_answers.py
 ```
 
-`GRAPH_BACKEND=local` runs everything against an in-memory mirror of the graph queries, with no TigerGraph account needed.
+`GRAPH_BACKEND=local` runs everything against an in-memory mirror of the graph queries, with no TigerGraph account needed. Locally the live stream runs in-process (`LIVE_BACKEND=local`, the default); on Cloud Run it is Pub/Sub + Firestore (`LIVE_BACKEND=gcp`).
 
 **On Cloud Run** (Windows PowerShell, from the repo root, with the gcloud CLI signed in and a project with billing):
 
@@ -158,7 +169,7 @@ python validate_answers.py
 .\deploy\deploy.ps1 -Project <your-gcp-project>
 ```
 
-The script enables the APIs, copies the graph secret from `.env` into Secret Manager without printing it, creates the service account, builds the image with Cloud Build and deploys the service. Gemini runs on Vertex AI, so no Gemini API key goes to the cloud; locally, `GEMINI_API_KEY` is used instead.
+The script enables the APIs, copies the graph secret from `.env` into Secret Manager without printing it, creates the service account, Firestore database and Pub/Sub topic, builds the image with Cloud Build, and deploys the console and the private worker with its push subscription. Gemini runs on Vertex AI, so no Gemini API key goes to the cloud; locally, `GEMINI_API_KEY` is used instead.
 
 Rebuilding the graph from the raw data: `python -m prep.prepare_data --raw <data dir>` then `python -m graph.setup_graph` (schema, vectors, data, case memory, policy and 16 installed queries).
 
@@ -166,6 +177,9 @@ Rebuilding the graph from the raw data: `python -m prep.prepare_data --raw <data
 
 ```
 sentinel_adk/   ADK agent (Gemini), tools, guardrail callbacks, chat runner
+agent/intake.py customer dispute intake (Gemini reading + graph matching)
+agent/live.py   live stream: Pub/Sub publish, Firestore queue, the worker's investigation job
+worker/         Cloud Run worker (FastAPI) behind the Pub/Sub push subscription
 agent/          orchestrator, evidence detectors, policy engine, link mechanisms, LLM writer, MCP bridge, backends
 ui/             SentinelGraph console (Streamlit)
 graph/          TigerGraph schema, vector schema, 16 GSQL queries, setup script
@@ -182,6 +196,7 @@ SentinelGraph began as our entry to the TigerGraph × Hacker House Goa 2026 agen
 
 - the Gemini agent on Google's ADK, with tools over the engine and graph, and the answer guardrail;
 - the "Ask the agent" console page;
+- customer dispute intake in any language, and a live alert stream on Pub/Sub with a Cloud Run worker and a Firestore-backed live queue;
 - deployment on Cloud Run with Secret Manager, a least-privilege service account and all Gemini calls on Vertex AI (no API key in the cloud);
 - link-mechanism grounding extended to every model-written sentence, after judge feedback on the earlier version.
 
