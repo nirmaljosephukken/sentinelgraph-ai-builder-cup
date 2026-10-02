@@ -1,0 +1,15 @@
+.git
+.gitignore
+.env
+.env.*
+.venv/
+venv/
+__pycache__/
+*.pyc
+_to_delete/
+_wheels/
+_va_tmp.py
+data/agent_cases_local/
+.streamlit/secrets.toml
+docs/*.mp4
+docs/*.mov

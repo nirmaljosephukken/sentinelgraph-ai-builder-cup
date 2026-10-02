@@ -1,0 +1,7 @@
+.env
+__pycache__/
+*.pyc
+data/agent_cases_local/
+.streamlit/secrets.toml
+_wheels/
+.venv/
