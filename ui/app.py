@@ -165,9 +165,12 @@ def merged_evidence(answer: dict, events: list[dict]) -> list[dict]:
 def trigger_facts(events: list[dict], answer: dict) -> dict:
     trig = next((x for x in events if x["kind"] == "trigger"), {})
     title = trig.get("title", "")
-    m = re.search(r"\(\$([\d,]+\.\d\d),\s*([a-z ]+)\)", title)
+    # the trigger text carries the transaction amount (e.g. "($77.07, in billing region 444.0)" or "$49.00 online");
+    # exposure is 0 for legitimate cases, so it is only a last resort
+    m = re.search(r"\$([\d,]+\.\d\d)", title)
     amount = float(m.group(1).replace(",", "")) if m else answer["case"]["exposure_usd"]
-    channel = m.group(2).strip() if m else ""
+    ch = re.search(r"\(\$[\d,]+\.\d\d,\s*([a-z ]+)\)", title)
+    channel = ch.group(1).strip() if ch else ""
     return {"title": title, "amount": amount, "channel": channel, **(trig.get("detail") or {})}
 
 
@@ -1200,7 +1203,7 @@ with st.sidebar:
                 f"<div>Closed cases<b>{int(s.get('closed_cases', 0)):,}</b></div>"
                 f"<div>Agent cases<b>{int(s.get('agent_cases', 0)):,}</b></div>"
                 "<div style='margin-top:14px;font:700 14px var(--display);color:var(--yellow)'>Less Dashboard. More Investigation.</div>"
-                "<div class='muted' style='font-size:11.5px'>TigerGraph × Hacker House Goa 2026</div></div>")
+                "<div class='muted' style='font-size:11.5px'>Google ADK · Gemini on Vertex AI · Cloud Run</div></div>")
     else:
         status_info.clear()
         st.html("<div class='side-status'><div><span class='d' style='background:var(--pink)'></span>TigerGraph"

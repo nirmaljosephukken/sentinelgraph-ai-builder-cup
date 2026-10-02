@@ -34,6 +34,14 @@ foreach ($k in @("TG_HOST", "TG_SECRET")) { if (-not $cfg[$k]) { throw "$k missi
 $graph = if ($cfg["TG_GRAPH"]) { $cfg["TG_GRAPH"] } else { "FraudGraph" }
 if (-not $Model) { $Model = if ($cfg["GEMINI_MODEL"]) { $cfg["GEMINI_MODEL"] } else { "gemini-3.5-flash-lite" } }
 
+function Test-Gcloud([string[]]$GArgs) {
+    $old = $ErrorActionPreference; $ErrorActionPreference = "Continue"
+    & gcloud @GArgs *> $null
+    $ok = ($LASTEXITCODE -eq 0)
+    $ErrorActionPreference = $old
+    return $ok
+}
+
 gcloud config set project $Project | Out-Null
 $number = gcloud projects describe $Project --format="value(projectNumber)"
 
@@ -45,8 +53,7 @@ Write-Host "2/4 Secrets ..."
 function Set-Secret([string]$name, [string]$value) {
     $tmp = New-TemporaryFile
     [IO.File]::WriteAllText($tmp.FullName, $value)   # no trailing newline
-    $exists = gcloud secrets list --filter="name~/$name$" --format="value(name)"
-    if ($exists) { gcloud secrets versions add $name --data-file="$($tmp.FullName)" | Out-Null }
+    if (Test-Gcloud @("secrets", "describe", $name)) { gcloud secrets versions add $name --data-file="$($tmp.FullName)" | Out-Null }
     else { gcloud secrets create $name --replication-policy=automatic --data-file="$($tmp.FullName)" | Out-Null }
     Remove-Item $tmp.FullName -Force
 }
@@ -68,6 +75,12 @@ gcloud projects add-iam-policy-binding $Project `
     --role="roles/run.builder" --condition=None | Out-Null
 
 Write-Host "4/4 Build and deploy (takes a few minutes) ..."
+# create the image repository up front: letting `run deploy` create it on a new project can time out
+if (-not (Test-Gcloud @("artifacts", "repositories", "describe", "cloud-run-source-deploy", "--location=$Region"))) {
+    gcloud artifacts repositories create cloud-run-source-deploy --repository-format=docker `
+        --location=$Region --description="Cloud Run source deploys" --quiet
+    if ($LASTEXITCODE -ne 0) { throw "Could not create the Artifact Registry repository. Wait a few minutes and run the script again." }
+}
 $vars = "TG_HOST=$($cfg['TG_HOST']),TG_GRAPH=$graph,GOOGLE_GENAI_USE_VERTEXAI=TRUE," +
         "GOOGLE_CLOUD_PROJECT=$Project,GOOGLE_CLOUD_LOCATION=$VertexLocation,ADK_MODEL=$Model,GEMINI_MODEL=$Model," +
         "LLM_PROVIDER=gemini"
@@ -75,6 +88,7 @@ gcloud run deploy $Service --source . --region $Region --service-account $sa `
     --set-env-vars $vars --set-secrets $secrets `
     --allow-unauthenticated --session-affinity --timeout 3600 `
     --cpu 2 --memory 2Gi --min-instances 0 --max-instances 2 --concurrency 20
+if ($LASTEXITCODE -ne 0) { throw "Deploy failed (see the error above). Running the script again is safe." }
 
 $url = gcloud run services describe $Service --region $Region --format="value(status.url)"
 Write-Host ""

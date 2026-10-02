@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| Live demo | _Cloud Run URL (added after deploy)_ |
+| Live demo | https://sentinelgraph-539369061797.asia-south1.run.app (wake-up takes about 30 seconds) |
 | Demo video | _3-minute video (coming)_ |
 | Proposal deck | _PDF (coming)_ |
 
