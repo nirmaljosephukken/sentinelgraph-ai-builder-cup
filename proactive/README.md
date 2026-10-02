@@ -18,7 +18,7 @@
 | `GT-I9060M Build/KTU84P \|  \| chrome 65.0 for android \|` | 9 | 0% | 45% | 0.52 |
 | `Moto G (4) Build/NPJS25.93-14-8.1-4 \|  \| chrome generic \|` | 7 | 0% | 0% | 0.81 |
 
-* **Threshold structuring** (`amount_band_scan`): 12 cards with ≥3 varied just-under-$500 online purchases within an hour: C05851-K1, C10990-K1, C00466-K1, C07297-K1, C01890-K1, C10751-K1, C03633-K1, C12641-K2, C02265-K1, C05423-K1, C05766-K1, C06881-K1. This is the same scheme as HHG-006.
+* **Threshold structuring** (`amount_band_scan`): 12 cards with ≥3 varied just-under-$500 online purchases within an hour: C05851-K1, C10990-K1, C00466-K1, C07297-K1, C01890-K1, C10751-K1, C03633-K1, C12641-K2, C02265-K1, C05423-K1, C05766-K1, C06881-K1. This is the same scheme as ALR-006.
 * **WCC components** (`ring_components`, weakly connected components over the client↔device co-usage graph): 188 components with 4+ cards and at most 3 devices. The SM-G935F ring appears as one 28-card component.
 
 ## Investigations opened by the agent

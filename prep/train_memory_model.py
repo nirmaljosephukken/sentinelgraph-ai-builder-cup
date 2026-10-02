@@ -16,7 +16,7 @@ Result on the October hold-out (reproduce with this script):
     bank risk     AUC 0.866  AP 0.25
 
 Usage:
-  python -m prep.train_memory_model --raw "<HHGOA_IEEE folder>"   (needs ~6 GB RAM, ~6 min)
+  python -m prep.train_memory_model --raw "<IEEE_CIS_RAW folder>"   (needs ~6 GB RAM, ~6 min)
 """
 from __future__ import annotations
 

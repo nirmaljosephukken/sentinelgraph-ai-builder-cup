@@ -1,5 +1,5 @@
 """
-SentinelGraph — agentic fraud investigation & next-best action console (TigerGraph × HH Goa 2026, Task 4).
+SentinelGraph — agentic fraud investigation & next-best action console (Google Cloud AI Builder Cup 2026, BFSI theme).
 
     python -m streamlit run ui/app.py
 
@@ -40,11 +40,11 @@ st.set_page_config(page_title="SentinelGraph · Fraud Intelligence", page_icon=s
 st.html(CSS)
 st.logo(str(ASSETS / "logo.svg"), icon_image=str(ASSETS / "mark.svg"), size="large")
 
-KIND = {"trigger": ("Alert received", "#F2C94C"), "case": ("Case opened", "#F2C94C"), "tool": ("Graph query", "#3FA66B"),
-        "evidence": ("Evidence", "#C8D4C2"), "assess": ("Assessment", "#F2C94C"), "decision": ("Decision", "#F2C94C"),
-        "execute": ("Executed", "#79D9A0"), "request": ("Evidence request", "#A9C8FF"),
-        "response": ("Reply", "#A9C8FF"), "llm": ("LLM", "#A9C8FF"), "memory": ("Case memory", "#79D9A0"),
-        "guardrail": ("Guardrail", "#FF5C93"), "error": ("Error", "#FF5C93"), "approval": ("Approval", "#79D9A0")}
+KIND = {"trigger": ("Alert received", "#FDD663"), "case": ("Case opened", "#FDD663"), "tool": ("Graph query", "#34A853"),
+        "evidence": ("Evidence", "#BDC1C6"), "assess": ("Assessment", "#FDD663"), "decision": ("Decision", "#FDD663"),
+        "execute": ("Executed", "#81C995"), "request": ("Evidence request", "#8AB4F8"),
+        "response": ("Reply", "#8AB4F8"), "llm": ("LLM", "#8AB4F8"), "memory": ("Case memory", "#81C995"),
+        "guardrail": ("Guardrail", "#F28B82"), "error": ("Error", "#F28B82"), "approval": ("Approval", "#81C995")}
 BADGE_CLS = {"TIGERGRAPH": "tg", "CASE MEMORY": "mem", "MEMORY MODEL": "mem", "GRAPHRAG": "rag", "CUSTOMER": "cust"}
 GLYPH = {"BLOCK_ALL_CARDS": ("■", "crit"), "BLOCK_CARD": ("■", "crit"), "DECLINE_TRANSACTION": ("✕", "crit"),
          "STEP_UP_AUTH": ("⇡", "warn"), "VERIFY_WITH_CUSTOMER": ("?", "warn"), "ESCALATE_TO_ANALYST": ("↑", "warn"),
@@ -116,12 +116,12 @@ def load_saved(case_id: str):
 
 
 def all_answers() -> list[dict]:
-    return [json.loads(p.read_text()) for p in sorted(SETTINGS.cases_dir.glob("HHG-*.json"))]
+    return [json.loads(p.read_text()) for p in sorted(SETTINGS.cases_dir.glob("ALR-*.json"))]
 
 
 def all_traces() -> dict[str, list]:
     out = {}
-    for p in sorted(SETTINGS.traces_dir.glob("HHG-*.json")):
+    for p in sorted(SETTINGS.traces_dir.glob("ALR-*.json")):
         try:
             out[p.stem] = json.loads(p.read_text())["events"]
         except (json.JSONDecodeError, KeyError):
@@ -210,32 +210,32 @@ def graph_html(answer: dict, events: list[dict], height: int = 520) -> tuple[str
         edges.append({"from": gid, "to": m, "dashes": True})
     data = json.dumps({"nodes": nodes, "edges": edges})
     doc = f"""<!doctype html><html><head><style>
-body{{margin:0;background:#10241B;font-family:'IBM Plex Sans',system-ui,sans-serif;border-radius:14px;overflow:hidden}}
+body{{margin:0;background:#121318;font-family:'IBM Plex Sans',system-ui,sans-serif;border-radius:14px;overflow:hidden}}
 #g{{width:100%;height:{height}px}}
-.lg{{position:absolute;left:14px;bottom:10px;display:flex;flex-wrap:wrap;gap:14px;font:12px system-ui;color:#C8D4C2}}
+.lg{{position:absolute;left:14px;bottom:10px;display:flex;flex-wrap:wrap;gap:14px;font:12px system-ui;color:#BDC1C6}}
 .lg i{{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}}
 </style></head><body>
 <div id="g"></div>
-<div class="lg"><span><i style="background:#FF5C93"></i>flagged transaction</span><span><i style="background:#F2C94C"></i>episode transaction</span>
-<span><i style="background:#F4EFE1"></i>card</span><span><i style="background:#79D9A0"></i>customer</span>
-<span><i style="background:#A9C8FF"></i>shared device</span><span><i style="background:#2A5040"></i>connected card</span>
-<span><i style="background:#3FA66B"></i>closed case (memory)</span><span><i style="background:#F2C94C;border-radius:50%"></i>agent case</span></div>
+<div class="lg"><span><i style="background:#F28B82"></i>flagged transaction</span><span><i style="background:#FDD663"></i>episode transaction</span>
+<span><i style="background:#E8EAED"></i>card</span><span><i style="background:#81C995"></i>customer</span>
+<span><i style="background:#8AB4F8"></i>shared device</span><span><i style="background:#3C4043"></i>connected card</span>
+<span><i style="background:#34A853"></i>closed case (memory)</span><span><i style="background:#FDD663;border-radius:50%"></i>agent case</span></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.9/standalone/umd/vis-network.min.js"></script>
 <script>
 const d = {data};
-const F = {{color:'#C8D4C2', size:11, face:'IBM Plex Mono, monospace'}};
+const F = {{color:'#BDC1C6', size:11, face:'IBM Plex Mono, monospace'}};
 const groups = {{
- customer:{{shape:'dot',size:11,color:{{background:'#79D9A0',border:'#79D9A0'}},font:F}},
- card:{{shape:'box',color:{{background:'#F4EFE1',border:'#F4EFE1'}},font:{{color:'#17261E',face:'IBM Plex Mono'}},margin:7}},
- flagged:{{shape:'diamond',size:16,color:{{background:'#FF5C93',border:'#FF5C93'}},font:{{color:'#FFB3CC',size:12,face:'IBM Plex Mono'}}}},
- txn:{{shape:'dot',size:8,color:{{background:'#F2C94C',border:'#F2C94C'}},font:F}},
- device:{{shape:'hexagon',size:17,color:{{background:'#A9C8FF',border:'#A9C8FF'}},font:F}},
- ccard:{{shape:'box',color:{{background:'#153024',border:'#2A5040'}},font:{{color:'#C8D4C2',size:10,face:'IBM Plex Mono'}},margin:4}},
- memory:{{shape:'triangle',size:9,color:{{background:'#3FA66B',border:'#3FA66B'}},font:F}},
- case:{{shape:'star',size:16,color:{{background:'#F2C94C',border:'#F2C94C'}},font:{{color:'#F2C94C',size:12,face:'IBM Plex Mono'}}}}}};
+ customer:{{shape:'dot',size:11,color:{{background:'#81C995',border:'#81C995'}},font:F}},
+ card:{{shape:'box',color:{{background:'#E8EAED',border:'#E8EAED'}},font:{{color:'#15171C',face:'IBM Plex Mono'}},margin:7}},
+ flagged:{{shape:'diamond',size:16,color:{{background:'#F28B82',border:'#F28B82'}},font:{{color:'#F6AEA9',size:12,face:'IBM Plex Mono'}}}},
+ txn:{{shape:'dot',size:8,color:{{background:'#FDD663',border:'#FDD663'}},font:F}},
+ device:{{shape:'hexagon',size:17,color:{{background:'#8AB4F8',border:'#8AB4F8'}},font:F}},
+ ccard:{{shape:'box',color:{{background:'#1A1B21',border:'#3C4043'}},font:{{color:'#BDC1C6',size:10,face:'IBM Plex Mono'}},margin:4}},
+ memory:{{shape:'triangle',size:9,color:{{background:'#34A853',border:'#34A853'}},font:F}},
+ case:{{shape:'star',size:16,color:{{background:'#FDD663',border:'#FDD663'}},font:{{color:'#FDD663',size:12,face:'IBM Plex Mono'}}}}}};
 const net = new vis.Network(document.getElementById('g'), {{nodes:new vis.DataSet(d.nodes), edges:new vis.DataSet(d.edges)}},
  {{groups, interaction:{{hover:true, zoomView:true}}, physics:{{stabilization:{{iterations:300}}, barnesHut:{{springLength:115, gravitationalConstant:-5200}}}},
-   edges:{{color:{{color:'#2A5040',highlight:'#F2C94C',hover:'#F2C94C'}}, width:1.2, smooth:{{type:'continuous'}}}}}});
+   edges:{{color:{{color:'#3C4043',highlight:'#FDD663',hover:'#FDD663'}}, width:1.2, smooth:{{type:'continuous'}}}}}});
 net.once('stabilizationIterationsDone', () => {{ net.fit({{animation:false}}); net.setOptions({{physics:false}}); }});
 setTimeout(() => net.fit(), 1200);
 new ResizeObserver(() => {{ net.redraw(); net.fit(); }}).observe(document.getElementById('g'));
@@ -278,7 +278,7 @@ def family_bars(fam: dict) -> str:
         clr = "var(--pink)" if v >= 0 else "var(--legit)"
         left = 50 if v >= 0 else 50 - w
         out.append(f"<div class='assess'><span class='ink2'>{e(vm.FAMILY.get(k, k))}</span>"
-                   f"<div style='position:relative;height:10px;background:#132A20;border-radius:3px'>"
+                   f"<div style='position:relative;height:10px;background:#16171C;border-radius:3px'>"
                    f"<div style='position:absolute;left:50%;top:-3px;bottom:-3px;width:1px;background:var(--line2)'></div>"
                    f"<div class='bar' style='position:absolute;left:{left:.1f}%;width:{w:.1f}%;background:{clr}'></div></div>"
                    f"<span class='x'>{txt}</span></div>")
@@ -572,7 +572,7 @@ def assessment_col(v: vm.View, events: list[dict]):
 def activity(events: list[dict]):
     rows = []
     for ev in events:
-        label, color = KIND.get(ev["kind"], (ev["kind"], "#8BA293"))
+        label, color = KIND.get(ev["kind"], (ev["kind"], "#9AA0A6"))
         d = ev.get("detail") or {}
         x = ""
         if ev["kind"] == "tool" and isinstance(d, dict):
@@ -601,7 +601,7 @@ def tab_sar(answer: dict):
     subj = e(", ".join(s["subjects"][:10])) + (" …" if len(s["subjects"]) > 10 else "")
     st.html(f"<div class='sar'><div class='hd'><div><div class='eyebrow'>Suspicious activity report · draft for L2 approval</div>"
             f"<div style='font:700 18px var(--display);margin-top:2px'>{e(answer['case']['graph_case_id'])}</div></div>"
-            f"<span class='badge' style='background:#FFD9E6;color:#8A1740;border-color:#F5B4CB'>FILE_REPORT · L2</span></div>"
+            f"<span class='badge' style='background:#FCE8E6;color:#A50E0E;border-color:#F6AEA9'>FILE_REPORT · L2</span></div>"
             f"<div class='grid'><div><div class='eyebrow'>Amount</div><div class='mono'>{money(s['total_amount_usd'])}</div></div>"
             f"<div><div class='eyebrow'>Activity dates</div><div class='mono'>{e(' → '.join(s['activity_dates']))}</div></div>"
             f"<div><div class='eyebrow'>Subjects</div><div class='mono' style='font-size:12px'>{subj}</div></div></div>"
@@ -745,10 +745,10 @@ def alert_preview(case: dict):
             f"<div class='gov' style='grid-template-columns:repeat({len(cells)},1fr);margin-top:14px'>"
             + "".join(f"<div><div class='eyebrow'>{e(k)}</div><div class='v mono'>{e(v)}</div></div>" for k, v in cells)
             + "</div></div>"
-            "<div class='empty' style='margin-top:18px'><div style='font:400 30px var(--serif);color:var(--yellow);"
-            "text-transform:uppercase'>Ready to investigate</div><div style='margin-top:6px'>Press <b>Run investigation</b>. "
+            "<div class='empty' style='margin-top:18px'><div class='gtext' style='font:600 30px var(--display);"
+            "letter-spacing:-.02em;display:inline-block'>Ready to investigate</div><div style='margin-top:6px'>Press <b>Run investigation</b>. "
             "The agent will query TigerGraph through MCP, weigh the evidence, decide the next best action and write "
-            "the case to the graph. Past results live in the <a href='./portfolio' target='_self' style='color:var(--yellow)'>"
+            "the case to the graph. Past results live in the <a href='./portfolio' target='_self' style='color:var(--blue)'>"
             "Case Portfolio</a>.</div></div>")
 
 
@@ -792,7 +792,7 @@ def page_investigate():
         box = st.status("Agent investigating on TigerGraph …", expanded=True)
 
         def emit(ev):
-            label, color = KIND.get(ev["kind"], (ev["kind"], "#8BA293"))
+            label, color = KIND.get(ev["kind"], (ev["kind"], "#9AA0A6"))
             d = ev.get("detail") or {}
             x = f"{str(d.get('transport', '')).upper()} · {float(d.get('latency_s', 0) or 0):.2f}s" \
                 if ev["kind"] == "tool" and isinstance(d, dict) else ""
@@ -806,7 +806,7 @@ def page_investigate():
         when = datetime.now().strftime("%d %b %Y, %H:%M:%S")
         st.session_state["result"] = (case, answer, inv.events)
         st.session_state["live"] = {"case_id": case["case_id"], "when": when, "prev": prev}
-        if case["case_id"].startswith("HHG-"):
+        if case["case_id"].startswith("ALR-"):
             (SETTINGS.cases_dir / f"{case['case_id']}.json").write_text(json.dumps(answer, indent=2))
             (SETTINGS.traces_dir / f"{case['case_id']}.json").write_text(json.dumps(
                 {"case": case, "events": inv.events, "llm": {"provider": llm.provider, "model": llm.model}},
@@ -876,7 +876,7 @@ def page_portfolio():
 def page_alerts():
     page_head("Investigations", "Alert queue", "Inbound alerts from the case pack, plus alerts the agent raised itself by monitoring the graph.")
     pack = case_pack()
-    done = {p.stem for p in SETTINGS.cases_dir.glob("HHG-*.json")}
+    done = {p.stem for p in SETTINGS.cases_dir.glob("ALR-*.json")}
     rows = []
     for r in pack.itertuples():
         state = "<span class='chip c-legit'>investigated</span>" if r.case_id in done else "<span class='chip c-warn'>new</span>"
@@ -924,7 +924,7 @@ def page_alerts():
 
 
 def case_picker(key: str):
-    ids = [p.stem for p in sorted(SETTINGS.cases_dir.glob("HHG-*.json"))]
+    ids = [p.stem for p in sorted(SETTINGS.cases_dir.glob("ALR-*.json"))]
     if not ids:
         st.html("<div class='empty'>No investigated cases yet.</div>")
         return None
@@ -1146,8 +1146,8 @@ def page_agent():
         st.session_state.pop("adk_chat")
         st.rerun()
     if not log:
-        st.html("<div class='sub' style='margin:6px 0 14px'>Try: <b>Investigate HHG-003</b> · "
-                "<b>How are the cards in HHG-006 linked?</b> · <b>Why does blocking need a team lead?</b> · "
+        st.html("<div class='sub' style='margin:6px 0 14px'>Try: <b>Investigate ALR-003</b> · "
+                "<b>How are the cards in ALR-006 linked?</b> · <b>Why does blocking need a team lead?</b> · "
                 "<b>Investigate transaction 3475414, the customer says it was not them</b></div>")
     for m in log:
         with st.chat_message(m["role"]):
@@ -1339,7 +1339,7 @@ with st.sidebar:
                 f"<div style='margin-top:6px'>Transactions<b>{int(s.get('txns', 0)):,}</b></div>"
                 f"<div>Closed cases<b>{int(s.get('closed_cases', 0)):,}</b></div>"
                 f"<div>Agent cases<b>{int(s.get('agent_cases', 0)):,}</b></div>"
-                "<div style='margin-top:14px;font:700 14px var(--display);color:var(--yellow)'>Less Dashboard. More Investigation.</div>"
+                "<div class='gtext' style='margin-top:14px;font:600 15px var(--display);display:inline-block'>Less dashboard. More investigation.</div>"
                 "<div class='muted' style='font-size:11.5px'>Google ADK · Gemini on Vertex AI · Cloud Run</div></div>")
     else:
         status_info.clear()

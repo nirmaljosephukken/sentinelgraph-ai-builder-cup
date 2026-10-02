@@ -26,7 +26,7 @@ SentinelGraph works an alert the way a careful analyst would, and shows its work
 2. **Says what it does not know.** Evidence is weighed in independent families, so correlated signals cannot pile up. Every case records its confidence and its open questions.
 3. **Asks for the evidence that would settle it.** Step-up authentication, customer verification or an analyst review, as the policy allows.
 4. **Recommends the next best action with its approval route.** Auto actions run; blocking a card waits for a team lead (L1); filing a suspicious activity report waits for a fraud manager (L2).
-5. **Explains itself in plain English.** Analysts talk to a Gemini agent ("Investigate HHG-003", "How are the cards in HHG-006 linked?", "Why does blocking need a team lead?") that calls the tools and cites the policy.
+5. **Explains itself in plain English.** Analysts talk to a Gemini agent ("Investigate ALR-003", "How are the cards in ALR-006 linked?", "Why does blocking need a team lead?") that calls the tools and cites the policy.
 6. **Remembers.** Every case is written back to the graph with its audit trail, so the next investigation can find it.
 7. **Takes complaints in the customer's own language.** A customer writes "मैंने यह खरीदारी नहीं की" or "ഞാൻ അത് ചെയ്തിട്ടില്ല"; Gemini translates it and reads the claim and amount, the graph finds the transaction, and the alert goes onto a live Pub/Sub stream where a Cloud Run worker investigates it within seconds.
 
@@ -81,9 +81,9 @@ The point of an AI investigator in a bank is decisions you can defend. SentinelG
 - **Gemini never picks the transaction.** In dispute intake Gemini only reads and translates. An amount the customer did not write is discarded, the transaction is found by a graph lookup, and if nothing matches the customer gets a follow-up question instead of a guess.
 - **Policy as code.** Fraud Policy rules R1 to R10, the stop rule (act at 85% or 15% with two independent lines of evidence) and a guard that refuses breaches such as blocking on one weak signal.
 
-### Example (live run on HHG-006, abridged)
+### Example (live run on ALR-006, abridged)
 
-> **Analyst:** Pull up HHG-006. How are the connected cards linked, and is this a device-sharing ring?
+> **Analyst:** Pull up ALR-006. How are the connected cards linked, and is this a device-sharing ring?
 >
 > **SentinelGraph:** Verdict: fraud (probability 0.99). Next best action: BLOCK_CARD (L1 team lead). The cardholder reported the charge as unauthorised, and it is part of a burst of 4 online purchases within 30 minutes, each just under $500, totalling $1,906.07. The 11 connected cards are linked by amount and timing only: the same just-under-$500 structuring pattern. This is not a device-sharing ring; none of them shares a device profile with this card.
 
@@ -96,26 +96,26 @@ The point of an AI investigator in a bank is decisions you can defend. SentinelG
 
 | Case | Verdict | P(fraud) | Pattern | Exposure | Connected cards | SAR | Evidence requested | Final next best action |
 |---|---|---|---|---|---|---|---|---|
-| HHG-001 | legitimate | 0.01 | none | $0.00 | 0 | no | none | ALLOW_TRANSACTION → GENERATE_REPORT → CLOSE_NO_FRAUD |
-| HHG-002 | legitimate | 0.01 | none | $0.00 | 0 | no | step_up_auth | ALLOW_TRANSACTION → CREATE_CASE → CLOSE_NO_FRAUD |
-| HHG-003 | uncertain | 0.63 | out_of_region_use | $49.00 | 0 | no | customer_validation | BLOCK_CARD → CREATE_CASE → ESCALATE_TO_ANALYST |
-| HHG-004 | fraud | 0.73 | card_not_present_new_device | $128.33 | 0 | no | customer_validation | BLOCK_CARD → CREATE_CASE |
-| HHG-005 | legitimate | 0.01 | none | $0.00 | 0 | no | step_up_auth | ALLOW_TRANSACTION → CREATE_CASE → CLOSE_NO_FRAUD |
-| HHG-006 | fraud | 0.99 | **undocumented** (threshold structuring) | $1,906.07 | 11 | yes | none | BLOCK_CARD → CREATE_CASE → FILE_REPORT → MONITOR_CONNECTED_CARDS → ESCALATE_TO_ANALYST |
-| HHG-007 | legitimate | 0.01 | none | $0.00 | 0 | no | none | ALLOW_TRANSACTION → GENERATE_REPORT → CLOSE_NO_FRAUD |
-| HHG-008 | fraud | 0.99 | card_not_present_fraud | $166.97 | 1 | yes | none | BLOCK_CARD → CREATE_CASE → FILE_REPORT → MONITOR_CONNECTED_CARDS |
-| HHG-009 | fraud | 0.98 | card_not_present_fraud | $30.02 | 0 | no | none | BLOCK_CARD → CREATE_CASE |
-| HHG-010 | legitimate | 0.01 | none | $0.00 | 0 | no | step_up_auth | ALLOW_TRANSACTION → CREATE_CASE → CLOSE_NO_FRAUD |
-| HHG-011 | fraud | 0.95 | card_not_present_new_device (shared device) | $131.30 | 5 | yes | none | BLOCK_CARD → CREATE_CASE → FILE_REPORT → MONITOR_CONNECTED_CARDS |
-| HHG-012 | legitimate | 0.01 | none | $0.00 | 0 | no | none | ALLOW_TRANSACTION → GENERATE_REPORT → CLOSE_NO_FRAUD |
-| HHG-013 | legitimate | 0.01 | none | $0.00 | 0 | no | step_up_auth | ALLOW_TRANSACTION → CREATE_CASE → CLOSE_NO_FRAUD |
-| HHG-014 | fraud | 0.89 | **undocumented** (device-sharing ring) | $439.61 | 27 | yes | none | BLOCK_CARD → CREATE_CASE → FILE_REPORT → MONITOR_CONNECTED_CARDS → ESCALATE_TO_ANALYST |
-| HHG-015 | legitimate | 0.01 | none | $0.00 | 0 | no | step_up_auth | ALLOW_TRANSACTION → CREATE_CASE → CLOSE_NO_FRAUD |
-| HHG-016 | fraud | 0.99 | card_not_present_new_device (shared origin) | $59.67 | 3 | yes | none | BLOCK_CARD → CREATE_CASE → FILE_REPORT → MONITOR_CONNECTED_CARDS |
-| HHG-017 | legitimate | 0.03 | none | $0.00 | 0 | no | none | ALLOW_TRANSACTION → GENERATE_REPORT → CLOSE_NO_FRAUD |
-| HHG-018 | legitimate (disputed recurring charge, R7) | 0.02 | none | $0.00 | 0 | no | customer_validation | CREATE_CASE → WARN_CUSTOMER → CLOSE_NO_FRAUD |
-| HHG-019 | fraud | 0.99 | card_not_present_new_device (shared device) | $99.92 | 4 | yes | none | BLOCK_CARD → CREATE_CASE → FILE_REPORT → MONITOR_CONNECTED_CARDS |
-| HHG-020 | legitimate | 0.01 | none | $0.00 | 0 | no | step_up_auth | ALLOW_TRANSACTION → CREATE_CASE → CLOSE_NO_FRAUD |
+| ALR-001 | legitimate | 0.01 | none | $0.00 | 0 | no | none | ALLOW_TRANSACTION → GENERATE_REPORT → CLOSE_NO_FRAUD |
+| ALR-002 | legitimate | 0.01 | none | $0.00 | 0 | no | step_up_auth | ALLOW_TRANSACTION → CREATE_CASE → CLOSE_NO_FRAUD |
+| ALR-003 | uncertain | 0.63 | out_of_region_use | $49.00 | 0 | no | customer_validation | BLOCK_CARD → CREATE_CASE → ESCALATE_TO_ANALYST |
+| ALR-004 | fraud | 0.73 | card_not_present_new_device | $128.33 | 0 | no | customer_validation | BLOCK_CARD → CREATE_CASE |
+| ALR-005 | legitimate | 0.01 | none | $0.00 | 0 | no | step_up_auth | ALLOW_TRANSACTION → CREATE_CASE → CLOSE_NO_FRAUD |
+| ALR-006 | fraud | 0.99 | **undocumented** (threshold structuring) | $1,906.07 | 11 | yes | none | BLOCK_CARD → CREATE_CASE → FILE_REPORT → MONITOR_CONNECTED_CARDS → ESCALATE_TO_ANALYST |
+| ALR-007 | legitimate | 0.01 | none | $0.00 | 0 | no | none | ALLOW_TRANSACTION → GENERATE_REPORT → CLOSE_NO_FRAUD |
+| ALR-008 | fraud | 0.99 | card_not_present_fraud | $166.97 | 1 | yes | none | BLOCK_CARD → CREATE_CASE → FILE_REPORT → MONITOR_CONNECTED_CARDS |
+| ALR-009 | fraud | 0.98 | card_not_present_fraud | $30.02 | 0 | no | none | BLOCK_CARD → CREATE_CASE |
+| ALR-010 | legitimate | 0.01 | none | $0.00 | 0 | no | step_up_auth | ALLOW_TRANSACTION → CREATE_CASE → CLOSE_NO_FRAUD |
+| ALR-011 | fraud | 0.95 | card_not_present_new_device (shared device) | $131.30 | 5 | yes | none | BLOCK_CARD → CREATE_CASE → FILE_REPORT → MONITOR_CONNECTED_CARDS |
+| ALR-012 | legitimate | 0.01 | none | $0.00 | 0 | no | none | ALLOW_TRANSACTION → GENERATE_REPORT → CLOSE_NO_FRAUD |
+| ALR-013 | legitimate | 0.01 | none | $0.00 | 0 | no | step_up_auth | ALLOW_TRANSACTION → CREATE_CASE → CLOSE_NO_FRAUD |
+| ALR-014 | fraud | 0.89 | **undocumented** (device-sharing ring) | $439.61 | 27 | yes | none | BLOCK_CARD → CREATE_CASE → FILE_REPORT → MONITOR_CONNECTED_CARDS → ESCALATE_TO_ANALYST |
+| ALR-015 | legitimate | 0.01 | none | $0.00 | 0 | no | step_up_auth | ALLOW_TRANSACTION → CREATE_CASE → CLOSE_NO_FRAUD |
+| ALR-016 | fraud | 0.99 | card_not_present_new_device (shared origin) | $59.67 | 3 | yes | none | BLOCK_CARD → CREATE_CASE → FILE_REPORT → MONITOR_CONNECTED_CARDS |
+| ALR-017 | legitimate | 0.03 | none | $0.00 | 0 | no | none | ALLOW_TRANSACTION → GENERATE_REPORT → CLOSE_NO_FRAUD |
+| ALR-018 | legitimate (disputed recurring charge, R7) | 0.02 | none | $0.00 | 0 | no | customer_validation | CREATE_CASE → WARN_CUSTOMER → CLOSE_NO_FRAUD |
+| ALR-019 | fraud | 0.99 | card_not_present_new_device (shared device) | $99.92 | 4 | yes | none | BLOCK_CARD → CREATE_CASE → FILE_REPORT → MONITOR_CONNECTED_CARDS |
+| ALR-020 | legitimate | 0.01 | none | $0.00 | 0 | no | step_up_auth | ALLOW_TRANSACTION → CREATE_CASE → CLOSE_NO_FRAUD |
 
 </details>
 
@@ -123,10 +123,10 @@ Beyond the benchmark, `monitor.py` scans the graph with no alert at all. It foun
 
 Highlights:
 
-- **Threshold structuring (HHG-006).** A pattern not in the bank's documented typologies: four online purchases in 30 minutes, each just under $500. The same pattern appears on 11 other cards and matches five undocumented closed cases.
-- **A 28-card device ring (HHG-014).** One device profile behind an anonymous proxy, marked New on every account, isolated as one component by weakly connected components.
-- **Fraud you cannot see from one card (HHG-011, HHG-016, HHG-019).** Each purchase looks ordinary on its own card; the graph shows the same rare device or email pair making near-identical purchases on other cards within days.
-- **Honest about doubt (HHG-003).** A denied $49 purchase in a region the card uses all the time: the card is protected, but the case stays uncertain and goes to an analyst.
+- **Threshold structuring (ALR-006).** A pattern not in the bank's documented typologies: four online purchases in 30 minutes, each just under $500. The same pattern appears on 11 other cards and matches five undocumented closed cases.
+- **A 28-card device ring (ALR-014).** One device profile behind an anonymous proxy, marked New on every account, isolated as one component by weakly connected components.
+- **Fraud you cannot see from one card (ALR-011, ALR-016, ALR-019).** Each purchase looks ordinary on its own card; the graph shows the same rare device or email pair making near-identical purchases on other cards within days.
+- **Honest about doubt (ALR-003).** A denied $49 purchase in a region the card uses all the time: the card is protected, but the case stays uncertain and goes to an analyst.
 
 ## How it works
 
@@ -192,7 +192,7 @@ deploy/         Cloud Run deploy script        Dockerfile, .gcloudignore
 
 ## Origin and what is new
 
-SentinelGraph began as our entry to the TigerGraph × Hacker House Goa 2026 agentic fraud task ([repo](https://github.com/nirmaljosephukken/HH_GOA_Task_4)), built in the same period as this event. New for the AI Builder Cup:
+SentinelGraph grew out of an earlier agentic fraud prototype on TigerGraph, built in the same period as this event. New for the AI Builder Cup:
 
 - the Gemini agent on Google's ADK, with tools over the engine and graph, and the answer guardrail;
 - the "Ask the agent" console page;
@@ -202,6 +202,6 @@ SentinelGraph began as our entry to the TigerGraph × Hacker House Goa 2026 agen
 
 ## Honest notes
 
-- The dataset is the public IEEE-CIS card data with the fraud label removed, plus a bank risk score, closed investigations and a fraud policy provided by the task. No real customer data is used.
+- The dataset is the public IEEE-CIS card data with the fraud label removed, plus a bank risk score, closed investigations and a fraud policy provided with the dataset. No real customer data is used.
 - Customer, step-up and analyst replies are not available in the data. The engine assumes the reply the evidence supports, never a hidden label, and writes the assumption into the case.
 - Gemini never sets a probability or an action. If you find a reply where it appears to, that is a bug we want to hear about.

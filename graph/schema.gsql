@@ -1,5 +1,5 @@
 // =====================================================================================
-//  FraudGraph schema - TigerGraph Agentic Fraud Investigation (HH Goa 2026)
+//  FraudGraph schema - SentinelGraph agentic fraud investigation
 //
 //  Three layers in one graph:
 //    1. Evidence graph   : Customer, Card, Client (latent cardholder), Txn, DeviceProfile,

@@ -3,7 +3,7 @@ Run the agent on the case pack and write one answer file per case to cases/<case
 investigation trace to traces/<case_id>.json.
 
     python run_cases.py                    # all 20 cases, TigerGraph backend (from .env)
-    python run_cases.py HHG-006 HHG-014    # selected cases
+    python run_cases.py ALR-006 ALR-014    # selected cases
     python run_cases.py --backend local    # offline mirror (no graph writes)
     python run_cases.py --no-llm           # deterministic templates only
 """

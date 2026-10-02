@@ -77,7 +77,7 @@ class Investigation:
         trig = c["trigger_type"]
         self.log("trigger", f"{trig.replace('_', ' ').title()}: {c['trigger_text']}",
                  {k: c.get(k) for k in ("case_id", "flagged_txn_id", "card_id", "customer_id", "risk_score")}, 0)
-        gcase = (f"CASE-2016-{int(c['case_id'].split('-')[1]):04d}" if c["case_id"].startswith("HHG-")
+        gcase = (f"CASE-2016-{int(c['case_id'].split('-')[1]):04d}" if c["case_id"].startswith("ALR-")
                  else f"CASE-2016-{c['case_id']}")
         self.log("case", f"Case {gcase} opened for alert {c['case_id']} (status: investigating)", {"graph_case_id": gcase})
 

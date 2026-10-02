@@ -26,7 +26,7 @@ from agent.config import SETTINGS, Settings
 
 GEMINI_FALLBACKS = ["gemini-flash-latest", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.8-flash",
                     "gemini-3.5-flash-lite", "gemini-flash-lite-latest"]
-ID_PATTERNS = [r"\bC\d{5}-K\d\b", r"\bC\d{5}\b", r"\b3\d{6}\b", r"\bCC-\d{4}\b", r"\bHHG-\d{3}\b"]
+ID_PATTERNS = [r"\bC\d{5}-K\d\b", r"\bC\d{5}\b", r"\b3\d{6}\b", r"\bCC-\d{4}\b", r"\bALR-\d{3}\b"]
 
 
 class LLM:

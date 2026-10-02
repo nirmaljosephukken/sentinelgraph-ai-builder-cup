@@ -1,5 +1,5 @@
 """
-Step 1 of the pipeline: turn the raw HHGOA_IEEE dataset into clean, graph-ready tables.
+Step 1 of the pipeline: turn the raw IEEE_CIS_RAW dataset into clean, graph-ready tables.
 
 What it derives (and why):
   * card_id        - The dataset never ships a card column. Card IDs such as C01234-K2 are
@@ -22,7 +22,7 @@ Outputs (data/prepared/):
   case_pack.csv         copy of the 20 benchmark alerts
 
 Usage:
-  python -m prep.prepare_data --raw "<path to HHGOA_IEEE folder>"
+  python -m prep.prepare_data --raw "<path to IEEE_CIS_RAW folder>"
 """
 from __future__ import annotations
 
@@ -101,7 +101,7 @@ def main(raw: str, out: str) -> None:
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--raw", required=True, help="folder containing the HHGOA_IEEE csv files")
+    ap.add_argument("--raw", required=True, help="folder containing the IEEE_CIS_RAW csv files")
     ap.add_argument("--out", default=os.path.join(os.path.dirname(__file__), "..", "data", "prepared"))
     a = ap.parse_args()
     main(a.raw, a.out)

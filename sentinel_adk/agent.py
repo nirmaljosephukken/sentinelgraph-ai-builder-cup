@@ -142,7 +142,7 @@ def investigate_alert(alert: str, tool_context: ToolContext, trigger: str = "ana
     """Run a full live investigation on TigerGraph and return the engine's decision.
 
     Args:
-        alert: a benchmark case id (for example HHG-006) or a transaction id (for example 3475414).
+        alert: a benchmark case id (for example ALR-006) or a transaction id (for example 3475414).
         trigger: for a transaction id, why it is being investigated: risk_score, customer_report or analyst_request.
         trigger_text: for a transaction id, the alert text (for example what the customer said).
 
@@ -176,10 +176,10 @@ def investigate_alert(alert: str, tool_context: ToolContext, trigger: str = "ana
 
 
 def get_saved_case(case_id: str, tool_context: ToolContext) -> dict:
-    """Load a finished investigation (benchmark HHG-001..HHG-020 or proactive PRO-001..PRO-006).
+    """Load a finished investigation (benchmark ALR-001..ALR-020 or proactive PRO-001..PRO-006).
 
     Args:
-        case_id: the case id, for example HHG-019 or PRO-005.
+        case_id: the case id, for example ALR-019 or PRO-005.
     """
     cid = case_id.strip().upper()
     for d in (SETTINGS.cases_dir, ROOT / "proactive" / "cases"):
@@ -307,7 +307,7 @@ TigerGraph graph: 590,742 card transactions, devices, email domains, billing reg
 (case memory) and the bank's fraud policy. You work for an analyst and answer in plain English.
 
 How you work:
-1. To investigate an alert, call investigate_alert (a case id like HHG-003 or a transaction id). To discuss a case
+1. To investigate an alert, call investigate_alert (a case id like ALR-003 or a transaction id). To discuss a case
    that was already investigated, call get_saved_case first. Use list_alerts when asked what is open.
 2. The verdict, fraud probability, next best actions, approval routes (auto, L1 team lead, L2 fraud manager) and the
    SAR decision come only from those tools. Never estimate a probability or recommend an action yourself; quote them.
