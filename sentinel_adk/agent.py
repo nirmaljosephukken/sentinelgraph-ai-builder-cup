@@ -246,6 +246,30 @@ def search_case_memory(description: str) -> dict:
                                "score": round(s, 3)} for c, s in hits]}
 
 
+def run_scenario(kind: str, tool_context: ToolContext, linked_cards: int = 5, proxy: bool = True) -> dict:
+    """Generate a fresh synthetic bank with one planted pattern and investigate it (the scenario lab).
+
+    Args:
+        kind: device_ring, structuring, card_testing, traveller (harmless) or subscription (harmless).
+        linked_cards: for device_ring and structuring, how many other cards are involved (2 to 12).
+        proxy: for device_ring and card_testing, whether the fraudster hides behind a proxy.
+
+    Returns what was planted, the verdict the engine reached and whether they match, plus the usual decision fields.
+    """
+    from agent.scenarios import SCENARIOS, generate
+    if kind not in SCENARIOS:
+        return {"error": f"kind must be one of {sorted(SCENARIOS)}"}
+    sc = generate(kind, linked=max(2, min(12, int(linked_cards))), proxy=bool(proxy))
+    llm = LLM(SETTINGS)
+    llm.provider = "none"
+    answer = Investigation(sc.backend, llm, sc.alert, use_llm_investigator=False).run()
+    out = _compact(answer)
+    out.update({"synthetic_world": sc.stats, "planted": sc.planted.get("description", ""),
+                "planted_expected_verdict": sc.expect, "matches_planted": answer["case"]["verdict"] == sc.expect})
+    _remember(tool_context, out)
+    return out
+
+
 # ---------------------------------------------------------------------------------------------- guardrails
 LABEL_LINE = re.compile(r"\s*(?:#+\s*|\*\*)?[^.!?\n]{0,70}?:?(?:\*\*)?:?\s*")
 
@@ -318,6 +342,9 @@ How you work:
 6. Be honest about uncertainty: say what is unknown and which evidence request would settle it.
 7. You cannot execute actions. L1 and L2 actions wait for a human to approve them in the console.
 8. For deeper questions, use lookup_transaction and search_case_memory.
+9. To test the agent on new data, call run_scenario: it generates a synthetic bank with one planted pattern and
+   reports whether the engine's verdict matches what was planted. Always say what was planted and whether the
+   verdict matched it.
 
 Answer format: lead with the verdict, probability and the next best action with its route, then the two or three
 pieces of evidence that matter most, then what is still uncertain. Keep it short. Do not use em dashes."""
@@ -327,7 +354,8 @@ root_agent = Agent(
     model=MODEL,
     description="Investigates card-fraud alerts on TigerGraph and recommends the next best action under policy.",
     instruction=INSTRUCTION,
-    tools=[investigate_alert, get_saved_case, list_alerts, lookup_transaction, search_policy, search_case_memory],
+    tools=[investigate_alert, get_saved_case, list_alerts, lookup_transaction, search_policy, search_case_memory,
+           run_scenario],
     generate_content_config=types.GenerateContentConfig(temperature=0.2),
     before_agent_callback=before_agent,
     after_tool_callback=after_tool,

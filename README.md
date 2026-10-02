@@ -87,6 +87,35 @@ The point of an AI investigator in a bank is decisions you can defend. SentinelG
 >
 > **SentinelGraph:** Verdict: fraud (probability 0.99). Next best action: BLOCK_CARD (L1 team lead). The cardholder reported the charge as unauthorised, and it is part of a burst of 4 online purchases within 30 minutes, each just under $500, totalling $1,906.07. The 11 connected cards are linked by amount and timing only: the same just-under-$500 structuring pattern. This is not a device-sharing ring; none of them shares a device profile with this card.
 
+## Test it on new data: the scenario lab
+
+The benchmark alerts are one dataset. To check that the agent generalises, the **Scenario lab** page (and the agent's
+`run_scenario` tool) generates a fresh synthetic bank every time: 150 cardholders with a home region, their own
+devices and email, and about 5,600 everyday transactions over three and a half months. On top it plants one scenario:
+
+| Scenario | Planted | What the agent has to notice |
+|---|---|---|
+| Device ring | fraud | one rare device, near-identical purchases on 2 to 12 other cards, optionally behind a proxy |
+| Threshold structuring | fraud | bursts of just-under-$500 purchases within an hour, repeated on other cards, each from its own device |
+| Card testing | fraud | tiny authorisations within an hour from one new device, then a large purchase |
+| Traveller | legitimate | card-present use far from home that continues on several separate days |
+| Disputed subscription | legitimate | a disputed charge that has recurred monthly with the same amount, device and email |
+
+Nothing in the generated data is labelled. The agent runs the same detectors, policy and stop rule as on the real
+alerts, and the lab compares its verdict with what was planted. A stress test runs every scenario on fresh random
+worlds with random settings; in our runs the agent matched the planted verdict in 200 of 200 worlds. Model scores for lab
+transactions are drawn synthetically for the scenario, and the page says so.
+
+## How to evaluate
+
+1. Open the live demo (the graph can take a minute to wake after a quiet spell), go to **Customer dispute**, pick
+   a customer and send a complaint in English, Hindi, Malayalam or any language you like.
+2. Watch it land on **Live queue** and open the finished case.
+3. On **Scenario lab**, generate a world, plant a pattern, and run the stress test.
+4. On **Ask the agent**, ask it to investigate an alert, explain a decision, or "run a device ring scenario with 8 cards".
+5. Any of the 590,742 transactions can be investigated from **Investigate → Custom alert**.
+6. Locally, `GRAPH_BACKEND=local python validate_answers.py` checks every answer file against the raw data.
+
 ## Results on 20 benchmark alerts
 
 10 legitimate, 9 fraud, 1 uncertain; six SARs drafted for fraud-manager sign-off. Every decision reproduces exactly on re-run. Answer files are in [`cases/`](cases/), full step-by-step traces in [`traces/`](traces/).
@@ -179,6 +208,7 @@ Rebuilding the graph from the raw data: `python -m prep.prepare_data --raw <data
 sentinel_adk/   ADK agent (Gemini), tools, guardrail callbacks, chat runner
 agent/intake.py customer dispute intake (Gemini reading + graph matching)
 agent/live.py   live stream: Pub/Sub publish, Firestore queue, the worker's investigation job
+agent/scenarios.py scenario lab: synthetic world generator, planted patterns, sandbox graph
 worker/         Cloud Run worker (FastAPI) behind the Pub/Sub push subscription
 agent/          orchestrator, evidence detectors, policy engine, link mechanisms, LLM writer, MCP bridge, backends
 ui/             SentinelGraph console (Streamlit)
@@ -196,6 +226,7 @@ SentinelGraph grew out of an earlier agentic fraud prototype on TigerGraph, buil
 
 - the Gemini agent on Google's ADK, with tools over the engine and graph, and the answer guardrail;
 - the "Ask the agent" console page;
+- the scenario lab: synthetic worlds with planted patterns, to test the agent on data it has never seen;
 - customer dispute intake in any language, and a live alert stream on Pub/Sub with a Cloud Run worker and a Firestore-backed live queue;
 - deployment on Cloud Run with Secret Manager, a least-privilege service account and all Gemini calls on Vertex AI (no API key in the cloud);
 - link-mechanism grounding for every model-written sentence, including the agent's chat answers.

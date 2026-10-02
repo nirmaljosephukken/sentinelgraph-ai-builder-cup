@@ -1307,6 +1307,107 @@ def _live_table():
             + "".join(rows) + "</tbody></table></div>")
 
 
+# =========================================================================== scenario lab
+def _lab_emit_box(label: str):
+    box = st.status(label, expanded=True)
+
+    def emit(ev):
+        lab, color = KIND.get(ev["kind"], (ev["kind"], "#9AA0A6"))
+        d = ev.get("detail") or {}
+        x = f"{str(d.get('transport', '')).upper()} · {float(d.get('latency_s', 0) or 0):.2f}s" \
+            if ev["kind"] == "tool" and isinstance(d, dict) else ""
+        box.html(f"<div class='lv'><div class='k' style='color:{color}'>{e(lab)}</div>"
+                 f"<div>{e(vm.short(ev['title'], 150))}</div><div class='x'>{x}</div></div>")
+    return box, emit
+
+
+def page_lab():
+    from agent import scenarios as SC
+    from agent.orchestrator import Investigation
+    page_head("Evaluate", "Scenario lab",
+              "Bring new data: generate a fresh synthetic bank, plant a fraud pattern or a harmless look-alike, and watch "
+              "the agent investigate it. Nothing in the data is labelled; the agent has to find the pattern itself, with "
+              "the same detectors, policy and stop rule as on the real alerts.")
+    kinds = list(SC.SCENARIOS)
+    c1, c2 = st.columns([1.15, 1], gap="large")
+    with c1:
+        kind = st.radio("Scenario", kinds, format_func=lambda k: SC.SCENARIOS[k]["label"], horizontal=True)
+        st.caption(SC.SCENARIOS[kind]["blurb"])
+        linked, proxy = 5, True
+        if kind in ("device_ring", "structuring"):
+            linked = st.slider("Other cards involved", 2, 12, 5)
+        elif kind == "traveller":
+            linked = st.slider("Days away from home", 3, 7, 4)
+        if kind in ("device_ring", "card_testing"):
+            proxy = st.toggle("Behind a proxy", value=True)
+    with c2:
+        trig = st.selectbox("How the bank raises it", ["default", "risk_score", "customer_report"],
+                            format_func={"default": "Scenario default", "risk_score": "Bank risk score",
+                                         "customer_report": "Customer report"}.get)
+        rnd = st.toggle("New random world each time", value=True)
+        seed = None if rnd else int(st.number_input("World seed", 1, 9999, 42))
+        use_llm = st.toggle("Gemini writes the summary", value=False, help="Off: deterministic templates, faster.")
+        go = st.button("Generate world and investigate", type="primary", icon=":material/science:", use_container_width=True)
+    if go:
+        with st.spinner("Generating a synthetic bank …"):
+            sc = SC.generate(kind, seed=seed, linked=linked, proxy=proxy, trigger=None if trig == "default" else trig)
+        llm = LLM(SETTINGS)
+        if not use_llm:
+            llm.provider = "none"
+        box, emit = _lab_emit_box("Agent investigating the generated world …")
+        inv = Investigation(sc.backend, llm, sc.alert, emit=emit, use_llm_investigator=False)
+        ans = inv.run()
+        box.update(label=f"Investigation complete · {ans['tool_calls']} graph calls · {ans['latency_s']}s",
+                   state="complete", expanded=False)
+        st.session_state["lab"] = {"alert": sc.alert, "answer": ans, "events": inv.events, "planted": sc.planted,
+                                   "stats": sc.stats, "expect": sc.expect, "kind": kind}
+    lab = st.session_state.get("lab")
+    if lab:
+        a, pl = lab["answer"], lab["planted"]
+        got = a["case"]["verdict"]
+        match = got == lab["expect"]
+        chip = ("<span class='chip c-legit'>matches what was planted</span>" if match else
+                "<span class='chip c-warn'>differs from what was planted</span>")
+        st.html("<div class='kpis' style='grid-template-columns:repeat(4,1fr)'>"
+                f"<div class='kpi'><div class='eyebrow'>Synthetic world</div><div class='n'>{lab['stats']['transactions']:,}</div>"
+                f"<div class='l'>transactions · {lab['stats']['cards']} cardholders · seed {pl['seed']}</div></div>"
+                f"<div class='kpi'><div class='eyebrow'>Planted</div><div class='n'>{e(SC.SCENARIOS[lab['kind']]['label'])}</div>"
+                f"<div class='l'>expected verdict: {e(lab['expect'])}</div></div>"
+                f"<div class='kpi'><div class='eyebrow'>Agent concluded</div><div class='n'>{e(got)}</div>"
+                f"<div class='l'>fraud probability {pct(a['case']['fraud_probability'])}</div></div>"
+                f"<div class='kpi'><div class='eyebrow'>Result</div><div style='margin-top:10px'>{chip}</div>"
+                f"<div class='l' style='margin-top:6px'>{len(a['case']['connected_card_ids'])} linked card(s) found</div></div></div>")
+        with st.expander("What was planted (the agent never sees this)"):
+            st.html(f"<div class='md'><p>{e(pl.get('description', ''))}</p><p class='mono' style='font-size:12px'>"
+                    f"cards: {e(', '.join(pl.get('cards', [])))}<br>transactions: {e(', '.join(pl.get('txn_ids', [])[:12]))}"
+                    + (f"<br>device: {e(pl['device'])}" if pl.get('device') else "") + "</p>"
+                    "<p class='muted'>Synthetic data. Model scores for lab transactions are drawn for the scenario; the "
+                    "bank's historical priors quoted in the evidence come from the main bank's memory.</p></div>")
+        show_investigation(lab["alert"], a, lab["events"])
+    sec("Stress test", "many random worlds")
+    n = st.select_slider("Worlds per scenario", [5, 10, 20], value=10)
+    if st.button("Run every scenario on fresh random worlds", icon=":material/repeat:"):
+        import random as _r
+        rows, bar = [], st.progress(0.0)
+        total = n * len(kinds)
+        k = 0
+        for kd in kinds:
+            ok = 0
+            for _ in range(n):
+                rr = _r.Random()
+                sc = SC.generate(kd, linked=rr.randint(2, 10), proxy=rr.random() < 0.5)
+                llm = LLM(SETTINGS)
+                llm.provider = "none"
+                v = Investigation(sc.backend, llm, sc.alert, use_llm_investigator=False).run()["case"]["verdict"]
+                ok += v == sc.expect
+                k += 1
+                bar.progress(k / total)
+            rows.append(f"<tr><td>{e(SC.SCENARIOS[kd]['label'])}</td><td>{e(SC.SCENARIOS[kd]['expect'])}</td>"
+                        f"<td class='num'>{ok} / {n}</td></tr>")
+        st.html("<div class='tbl'><table style='min-width:600px'><thead><tr><th>Scenario</th><th>Planted</th>"
+                "<th style='text-align:right'>Agent matched</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>")
+
+
 # =========================================================================== navigation
 pages = {
     "Investigations": [st.Page(page_investigate, title="Investigate", icon=":material/policy:", url_path="investigate", default=True),
@@ -1315,6 +1416,7 @@ pages = {
                        st.Page(page_live, title="Live queue", icon=":material/stream:", url_path="live"),
                        st.Page(page_portfolio, title="Case Portfolio", icon=":material/folder_open:", url_path="portfolio"),
                        st.Page(page_alerts, title="Alert Queue", icon=":material/notifications_active:", url_path="alerts")],
+    "Evaluate": [st.Page(page_lab, title="Scenario lab", icon=":material/science:", url_path="lab")],
     "Intelligence": [st.Page(page_graph, title="Investigation Graph", icon=":material/hub:", url_path="graph"),
                      st.Page(page_patterns, title="Fraud Patterns", icon=":material/pattern:", url_path="patterns"),
                      st.Page(page_memory, title="Case Memory", icon=":material/psychology:", url_path="memory"),

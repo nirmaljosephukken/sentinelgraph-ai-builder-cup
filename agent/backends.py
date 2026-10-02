@@ -142,6 +142,14 @@ class LocalBackend(GraphBackend):
                                  "device_type", "M4", "M6", "D1", "card_id", "customer_id", "client_id",
                                  "network", "card_type"])
         t = t.rename(columns={"txn_id": "id", "M4": "m4", "M6": "m6", "D1": "d1"})
+        cc = pd.read_csv(d / "closed_cases.csv", dtype=str).fillna("")
+        self._index(t, [norm_cc(r) for r in cc.rename(columns={"case_id": "id"}).to_dict("records")])
+        self.case_dir = Path(self.s.prepared_dir).parent / "agent_cases_local"
+        self.case_dir.mkdir(parents=True, exist_ok=True)
+
+    def _index(self, t, cc: list[dict]) -> None:
+        """Build the in-memory graph from a transactions frame and closed cases (dataset or a generated world)."""
+        t = t.copy()
         t["id"] = t["id"].astype(str)
         t["device_profile"] = t["device_profile"].fillna("")
         t = t.sort_values(["ts", "id"]).reset_index(drop=True)
@@ -149,12 +157,13 @@ class LocalBackend(GraphBackend):
         self.by_id = {k: i for i, k in enumerate(t["id"].values)}
         self.by_card = t.groupby("card_id").indices
         self.by_client = t.groupby("client_id").indices
-        self.by_device = t[t.device_profile != ""].groupby("device_profile").indices
+        # .groups keeps the row labels of the full (re-indexed) frame; .indices on a filtered frame would give
+        # positions inside the subset and point device lookups at the wrong rows
+        self.by_device = {k: list(v) for k, v in t[t.device_profile != ""].groupby("device_profile").groups.items()}
         self.by_email = t.groupby("p_email").indices
         self.cards = t.groupby("card_id").agg(customer_id=("customer_id", "first"), network=("network", "first"),
                                               card_type=("card_type", "first"), n_txns=("id", "size"))
-        cc = pd.read_csv(d / "closed_cases.csv", dtype=str).fillna("")
-        self.cc = [norm_cc(r) for r in cc.rename(columns={"case_id": "id"}).to_dict("records")]
+        self.cc = cc
         self.cc_by_card: dict[str, list[dict]] = {}
         self.cc_conn_by_card: dict[str, list[dict]] = {}
         self.cc_by_txn: dict[str, list[dict]] = {}
@@ -166,8 +175,6 @@ class LocalBackend(GraphBackend):
                 self.cc_by_txn.setdefault(x, []).append(c)
         self.cc_emb = [embed(*cc_embedding_text(c)) for c in self.cc]
         self.chunks = knowledge.chunks()
-        self.case_dir = Path(self.s.prepared_dir).parent / "agent_cases_local"
-        self.case_dir.mkdir(parents=True, exist_ok=True)
 
     def _log(self, q):
         self.transport_log.append(f"local:{q}")

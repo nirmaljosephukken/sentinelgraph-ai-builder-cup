@@ -1,19 +1,19 @@
 # SentinelGraph: 3-minute demo video script
 
-Target length 2:50 (hard limit 3:00). About 400 spoken words. Judging weight: technical merit and Gen AI
+Target length 2:55 (hard limit 3:00). About 420 spoken words. Judging weight: technical merit and Gen AI
 implementation (40%), so every section shows Gemini or Google Cloud doing real work.
 
 ## Before you press record (10 minutes)
 
 1. Savanna console: workspace **Active**.
 2. Warm up the cloud: on the live site, send one customer dispute and wait for **done** (this starts the worker
-   and connects it to TigerGraph). Then click **New chat** on Ask the agent.
+   and connects it to TigerGraph). Click **New chat** on Ask the agent. On Scenario lab, generate one world.
 3. Browser full screen, zoom 90%. Tabs in this order:
    1. `https://sentinelgraph-539369061797.asia-south1.run.app/dispute`
    2. the same site, page **Live queue**
    3. the same site, page **Ask the agent**
-   4. Google Cloud console, **Cloud Run** service list (shows `sentinelgraph` and `sentinelgraph-worker`)
-   5. the GitHub README, scrolled to the architecture diagram
+   4. the same site, page **Scenario lab**
+   5. Google Cloud console, **Cloud Run** service list (shows `sentinelgraph` and `sentinelgraph-worker`)
 4. Notifications off. Recorder: OBS or Win+Alt+R. Mic on. Script on your phone.
 
 ---
@@ -33,7 +33,7 @@ implementation (40%), so every section shows Gemini or Google Cloud doing real w
 
 Customer **C07297**, example **Hindi** is already selected. Point at the message.
 
-> "Here's a real customer complaint, in Hindi: a $482 purchase they say they never made."
+> "Here's a customer complaint in Hindi: a $482 purchase they say they never made."
 
 Click **Read and send to the agent**. Point at step 1.
 
@@ -50,23 +50,14 @@ Wait for **done** on the status line.
 > "About fifteen seconds later: fraud, ninety-nine percent. Block the card, which needs a team lead, and file a
 > suspicious activity report, which needs a fraud manager."
 
-## 1:10 to 1:45 · Why, and who approves (tab 2, Live queue)
+## 1:10 to 1:30 · Why, and who approves (tab 2, Live queue)
 
-Click **Replay bank feed** first, then pick the Hindi alert under **Open an investigated alert** and scroll to the
-four cards.
+Pick the Hindi alert under **Open an investigated alert**, scroll to the four cards, then to **Next best action**.
 
-> "The live queue shows every alert as it lands. The bank's own alerts run through the same stream."
+> "Every alert lands here, investigated. The agent shows what happened, what it found, how certain it is and what
+> happens next, and every action has an approval route. Nothing that hurts a customer runs without a human."
 
-Scroll to **Next best action**.
-
-> "The agent shows what happened, what it found, how certain it is and what happens next. Every action has an
-> approval route. Nothing that hurts a customer runs without a human."
-
-Scroll back up: by now the three replayed alerts should show **done**, one of them **uncertain**.
-
-> "And when the evidence disagrees, it says uncertain and hands the case to an analyst instead of faking confidence."
-
-## 1:45 to 2:25 · Ask the agent, with a guardrail (tab 3)
+## 1:30 to 2:05 · Ask the agent, with a guardrail (tab 3)
 
 Type: *Pull up ALR-006. How are the connected cards linked, and is this a device-sharing ring?*
 
@@ -78,9 +69,21 @@ Point at the answer as it appears.
 > isn't a ring. That sentence comes from the evidence, not from the model. A guardrail on every reply removes any
 > claim or ID the graph doesn't support."
 
-## 2:25 to 2:45 · How it runs on Google Cloud (tab 4, then tab 5)
+## 2:05 to 2:25 · Tested on data it has never seen (tab 4, Scenario lab)
 
-Show the two Cloud Run services, then the README diagram.
+Pick **Device ring**, set **Other cards involved** to 8, click **Generate world and investigate**.
+
+> "Real alerts come from one dataset, so we test on new data. The lab builds a fresh synthetic bank, plants a pattern
+> the agent can't see, and lets it investigate."
+
+Point at **Agent concluded** and the green **matches what was planted** chip.
+
+> "It found the ring and all eight cards. Across two hundred random worlds, fraud and harmless look-alikes, it matched
+> every one."
+
+## 2:25 to 2:45 · How it runs on Google Cloud (tab 5)
+
+Show the two Cloud Run services.
 
 > "Two Cloud Run services from one image: the console with the ADK agent, and a private worker behind Pub/Sub.
 > Firestore holds the live queue, Secret Manager holds the graph credential, and every Gemini call goes through
@@ -98,6 +101,6 @@ Show the two Cloud Run services, then the README diagram.
 - **The alert stays "queued" for more than 30 seconds:** the worker is starting up. Keep talking over it; it is
   usually done within a minute. Warming up first (step 2 above) avoids this.
 - **"TigerGraph unreachable" or empty pages:** Savanna went to sleep. Wake it in the Savanna console, wait a minute,
-  reload.
-- **Running long:** shorten the Live queue section (skip Replay bank feed).
+  reload. (The Scenario lab does not need Savanna.)
+- **Running long:** cut the Live queue section (1:10 to 1:30) first, then shorten the Google Cloud section.
 - **You stumble:** pause and repeat the sentence; trim it afterwards.
